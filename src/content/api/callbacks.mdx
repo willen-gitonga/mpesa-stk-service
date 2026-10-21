@@ -15,7 +15,7 @@ Safaricom sends a callback to this URL after the user completes or cancels an ST
 {PUBLIC_BASE_URL}/callback/{CALLBACK_SECRET}
 ```
 
-You do not call this endpoint yourself. It is registered with Safaricom automatically when you initiate an STK Push via [`POST /stk-push`](/api/stk-push).
+You do not call this endpoint yourself. The helper sends this URL to Safaricom as the callback URL with every STK Push request made through [`POST /stk-push`](/api/stk-push).
 
 ## Authentication
 
@@ -88,7 +88,7 @@ The endpoint always returns HTTP 200 with the following JSON body, regardless of
 }
 ```
 
-Safaricom expects this acknowledgement. Returning a different status code may cause Safaricom to retry the callback.
+This is the acknowledgement Safaricom expects.
 
 ## Error responses
 
