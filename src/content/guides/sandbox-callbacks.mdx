@@ -1,0 +1,140 @@
+---
+title: Receive payment callbacks from the Daraja sandbox
+description: Connect the helper to Safaricom's Daraja sandbox, receive real payment callbacks on your local machine, and handle successful and failed payments.
+---
+
+In the quickstart you simulated Safaricom's callback yourself. In this guide you'll switch to the Daraja sandbox, send a real payment prompt, and receive Safaricom's callback on your local machine. You'll also see how the helper handles failed payments and what to check when something goes wrong.
+
+STK Push is asynchronous. Your request only starts the payment. Safaricom sends the result later, to a callback URL you provide, once the customer approves or cancels the prompt. Because Safaricom has to reach that URL over the internet, it must be public and use HTTPS. A tunnel such as ngrok gives your local server that kind of address.
+
+## Before you begin
+
+- You've completed the [Quickstart](/quickstart).
+- You have a Safaricom Daraja developer account with a sandbox app. The app needs M-Pesa Express (Lipa na M-Pesa Online) enabled.
+- You have ngrok installed and signed in.
+- To see the payment prompt on a phone, you need a Safaricom number you can access.
+
+## Connect to the sandbox
+
+<Steps>
+  <Step title="Collect your Daraja credentials">
+    From your sandbox app on the Daraja portal, copy the consumer key and consumer secret. From the portal's sandbox test credentials, copy the passkey. The sandbox shortcode is `174379`, which is already the default.
+  </Step>
+  <Step title="Start a tunnel">
+    In a new terminal, run:
+
+    ```bash
+    ngrok http 8000
+    ```
+
+    Copy the `https://` forwarding URL from the output, for example `https://abc-123.ngrok-free.app`. Keep this terminal running.
+  </Step>
+  <Step title="Generate a callback secret">
+    ```bash
+    python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+    ```
+
+    The helper adds this value to your callback URL. Safaricom doesn't sign its callbacks, so a hard-to-guess URL stops other people from posting fake payment results to your server.
+  </Step>
+  <Step title="Update your env file">
+    Edit `.env` in the project root:
+
+    ```text
+    MOCK_MODE=false
+    CONSUMER_KEY=your-consumer-key
+    CONSUMER_SECRET=your-consumer-secret
+    SHORTCODE=174379
+    PASSKEY=your-sandbox-passkey
+    PUBLIC_BASE_URL=https://abc-123.ngrok-free.app
+    CALLBACK_SECRET=your-generated-secret
+    ```
+
+    Write values without quotes or spaces around the `=`. Never commit this file.
+  </Step>
+  <Step title="Restart the server">
+    Stop the server with `Ctrl+C` and start it again from the project root:
+
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+
+    You need a full restart because `--reload` watches your code, not `.env`. If a required setting is empty, the server stops and names the missing setting.
+  </Step>
+  <Step title="Send a real payment prompt">
+    Use your own Safaricom number:
+
+    ```bash
+    curl -X POST http://127.0.0.1:8000/stk-push \
+      -H "Content-Type: application/json" \
+      -d '{"phone_number": "07XXXXXXXX", "amount": 1}'
+    ```
+
+    The response is `pending`, as in mock mode, but the `checkout_request_id` now comes from Safaricom. Approve or cancel the prompt on your phone.
+  </Step>
+  <Step title="Confirm the callback arrived">
+    In the server terminal, look for a line like:
+
+    ```text
+    INFO:     127.0.0.1:52344 - "POST /callback/... HTTP/1.1" 200 OK
+    ```
+
+    Then check the payment:
+
+    ```bash
+    curl http://127.0.0.1:8000/payments/YOUR_CHECKOUT_REQUEST_ID
+    ```
+
+    If you approved the prompt, the status is `completed` with a receipt number. If you cancelled, it's `failed`.
+  </Step>
+</Steps>
+
+The server log shows the full callback path, including your secret, so don't share that output publicly.
+
+## Example: handle a failed payment
+
+A failed payment's callback has a non-zero `ResultCode` and no receipt details. You can test this in mock mode without a phone. Set `MOCK_MODE=true` in `.env`, restart the server, send a payment prompt, then post this callback with your `checkout_request_id` in place of `YOUR_CHECKOUT_REQUEST_ID`:
+
+```bash
+curl -X POST http://127.0.0.1:8000/callback/YOUR_CALLBACK_SECRET \
+  -H "Content-Type: application/json" \
+  -d '{"Body": {"stkCallback": {"MerchantRequestID": "29115-34620561-1", "CheckoutRequestID": "YOUR_CHECKOUT_REQUEST_ID", "ResultCode": 1032, "ResultDesc": "Request cancelled by user"}}}'
+```
+
+Use `change-me` as the secret if you haven't changed `CALLBACK_SECRET`. The payment is now `failed`:
+
+```json
+{
+  "checkout_request_id": "ws_CO_MOCK_8F3A2C91B7D4",
+  "phone_number": "254712345678",
+  "amount": 1,
+  "status": "failed",
+  "result_desc": "Request cancelled by user",
+  "receipt_number": null
+}
+```
+
+`1032` is the result code Safaricom uses when the customer cancels the prompt. Your application should treat any non-zero result code as a failed payment.
+
+## How the helper handles callbacks
+
+- **A callback with the wrong secret** gets `404 Not Found`, without saying why.
+- **Duplicate callbacks** are ignored once a payment is `completed` or `failed`, so a repeated callback can't change a final result.
+- **Callbacks for unknown payments** are acknowledged but ignored, so nobody can create payment records through the callback URL.
+- **Every valid callback** gets the acknowledgement Safaricom expects: `{"ResultCode": 0, "ResultDesc": "Accepted"}`.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Server stops with `MOCK_MODE is false but these settings are empty` | A required value in `.env` is blank. | Fill in each setting named in the error, then restart. |
+| `502` with `Authentication failed (400)` | Daraja rejected the credentials. Its error doesn't say why. A common cause is empty keys because `.env` is missing or isn't in the project root. | Check that `.env` is in the project root and the values have no quotes or spaces. Run `python3 -c "from app.main import Settings; s = Settings(); print(bool(s.consumer_key), bool(s.consumer_secret))"` from the root. It should print `True True`. Also check the key and secret come from the same Daraja app. |
+| Changes to `.env` have no effect | `--reload` only watches code files. | Stop the server and start it again. |
+| No callback ever arrives | Safaricom can't reach your callback URL. | Check `PUBLIC_BASE_URL` is your current `https://` ngrok address. If you restarted ngrok, the address may have changed: update `.env` and restart the server. Open `http://127.0.0.1:4040` to see every request that reached ngrok. |
+| Callback returns `404` | The secret in the URL doesn't match `CALLBACK_SECRET`. | Use the same value in the URL and in `.env`. |
+| Callback returns `400` with "Not an STK Push callback" | The body is missing `Body.stkCallback`, `CheckoutRequestID` or `ResultCode`. | Compare your JSON with the example above. |
+| Payment stays `pending` after the callback arrived | The server restarted between the prompt and the callback, so the payment was lost from memory and the callback was ignored. | Send a new payment prompt and keep the server running until the callback arrives. |
+
+## Next steps
+
+- See the [callback API reference](/api/callbacks) for the full payload format.
+- Before handling real payments, store payments in a database and add authentication to `/stk-push` and `/payments`.

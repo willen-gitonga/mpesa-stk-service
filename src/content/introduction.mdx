@@ -1,21 +1,22 @@
 ---
 title: Introduction
-description: A FastAPI service that wraps Safaricom's Daraja STK Push API, handling access tokens, password generation, phone normalization, and callback parsing.
+description: A small FastAPI service that sends M-Pesa STK Push payment prompts through Safaricom's Daraja sandbox and records the result when Safaricom calls back.
 ---
 
-M-Pesa STK Push Helper is a FastAPI service that sends M-Pesa STK Push payment prompts through Safaricom's Daraja sandbox API and records results when Safaricom calls back. It's for Python developers adding M-Pesa payments to a backend for the first time. It handles the repetitive parts of the Daraja integration so you can focus on your application logic.
+M-Pesa STK Push Helper is a FastAPI service that sends M-Pesa STK Push payment prompts through Safaricom's Daraja sandbox API and records the result when Safaricom calls back. It's for Python developers adding M-Pesa payments to a backend for the first time. It handles the repetitive parts of the Daraja integration so you can focus on your application logic.
 
 ## What it does
 
-- **Access-token management.** Fetches and caches Daraja OAuth tokens, refreshing them automatically before they expire.
-- **Password and timestamp generation.** Builds the base64-encoded password from your shortcode, passkey, and a timestamp in East Africa Time, as the Daraja API requires.
-- **Phone number normalization.** Accepts local (`0712345678`) or international (`+254712345678`) formats and converts them to the `254...` form that Daraja expects.
-- **Callback parsing.** Receives Safaricom's asynchronous result on a secret URL path, extracts the receipt number and result code, and updates the payment record.
-- **Mock mode.** Returns synthetic responses without contacting Safaricom, so you can develop and test without Daraja credentials.
+- **Access tokens.** Caches the Daraja OAuth token and fetches a new one shortly before it expires, so you don't authenticate on every request.
+- **Password and timestamp.** Builds the base64-encoded password from your shortcode, passkey and a timestamp in East Africa Time, as Daraja requires.
+- **Phone number formats.** Accepts local (`0712345678`) or international (`+254712345678`) numbers and converts them to the `254...` format Daraja expects.
+- **Callbacks.** Receives Safaricom's payment result on a secret URL, records the result and receipt number, and ignores duplicate callbacks and callbacks for unknown payments.
+- **Mock mode.** Returns realistic responses without contacting Safaricom, so you can try the full flow without a Daraja account.
 
 ## Requirements
 
-Python 3.10 or later is required. The project uses Python's `X | None` union-type syntax, which is not available in earlier versions.
+- Python 3.10 or later.
+- For the Daraja sandbox only: a Safaricom Daraja developer account and a public HTTPS tunnel such as ngrok. Mock mode needs neither.
 
 ## Dependencies
 
@@ -30,11 +31,11 @@ Python 3.10 or later is required. The project uses Python's `X | None` union-typ
 
 Keep these constraints in mind before you start:
 
-- **Sandbox only.** The Daraja base URL (`https://sandbox.safaricom.co.ke`) is hardcoded. There is no production URL option.
-- **In-memory storage.** Payment records are held in a Python `dict` inside the application process. All data is lost when the server restarts.
-- **No endpoint authentication.** The `/stk-push` and `/payments` routes have no auth layer. Add your own middleware or gateway before exposing the service publicly.
-- **Hardcoded request fields.** `AccountReference` is set to `"DocsDemo"` and `TransactionDesc` to `"Payment"` in every STK push request. These values are not configurable.
+- **Sandbox only.** The Daraja sandbox URL is hardcoded. Going live requires Safaricom's go-live process and a production-ready setup.
+- **In-memory storage.** Payment records are kept in memory and are lost when the server restarts.
+- **No endpoint authentication.** The `/stk-push` and `/payments` routes have no authentication. Add your own before exposing the service publicly.
+- **Fixed request fields.** Every STK Push uses `DocsDemo` as the account reference and `Payment` as the description.
 
 ## Next steps
 
-See the [Quickstart](/quickstart) to run the service locally in mock mode.
+Start with the [Quickstart](/quickstart) to send your first payment prompt in mock mode. Then follow [Receive payment callbacks from the Daraja sandbox](/guides/sandbox-callbacks) to connect to Safaricom.
