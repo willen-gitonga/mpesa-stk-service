@@ -22,32 +22,37 @@
     }
   },
   "tabs": [
-    {
-      "tab": "Documentation",
-      "groups": [
-        {
-          "group": "Getting Started",
-          "pages": [
-            "introduction",
-            "quickstart"
-          ]
-        },
-        {
-          "group": "Reference",
-          "pages": [
-            "configuration",
-            "changelog"
-          ]
-        },
-        {
-          "group": "API Reference",
-          "pages": [
-            "api/stk-push",
-            "api/payment-status",
-            "api/callbacks"
-          ]
-        }
-      ]
-    }
-  ]
+  {
+    "tab": "Documentation",
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/sandbox-callbacks"
+        ]
+      },
+      {
+        "group": "API Reference",
+        "pages": [
+          "api/stk-push",
+          "api/payment-status",
+          "api/callbacks"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "configuration"
+        ]
+      }
+    ]
+  }
+]
 }
