@@ -1,0 +1,56 @@
+---
+title: Configuration
+description: Environment variables that control M-Pesa STK Push Helper, with types, defaults, and startup validation rules.
+---
+
+All settings are loaded from a `.env` file in the project root (the parent directory of `app/`). The file is read at startup through `pydantic-settings`. Any variable not present in the file falls back to its default. Unknown variables are ignored.
+
+Copy the included template to get started:
+
+```bash
+cp .env.example .env
+```
+
+## Settings reference
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `MOCK_MODE` | bool | `true` | When `true`, STK push requests return a synthetic response with UUID-based IDs and no call is made to Safaricom. Set to `false` to send real requests to the Daraja sandbox. |
+| `CONSUMER_KEY` | str | `""` | HTTP Basic-auth username sent to the Safaricom OAuth endpoint. Required when `MOCK_MODE` is `false`. |
+| `CONSUMER_SECRET` | str | `""` | HTTP Basic-auth password sent to the same OAuth endpoint. Required when `MOCK_MODE` is `false`. |
+| `SHORTCODE` | str | `"174379"` | Used as `BusinessShortCode` and `PartyB` in the STK push request body, and combined with `PASSKEY` and a timestamp to compute the request password. |
+| `PASSKEY` | str | `""` | Combined with `SHORTCODE` and the current timestamp (base64-encoded) to produce the `Password` field sent to Daraja. Required when `MOCK_MODE` is `false`. |
+| `PUBLIC_BASE_URL` | str | `""` | Public URL where the app is reachable (for example `https://abc-123.ngrok-free.app`). A trailing slash is stripped automatically. Used to build the callback URL sent to Safaricom. Required when `MOCK_MODE` is `false`. |
+| `CALLBACK_SECRET` | str | `"change-me"` | Random string appended to the callback path. Incoming callbacks are accepted only when the path segment matches this value (compared with `hmac.compare_digest`). |
+
+The callback URL assembled at startup has the form:
+
+```
+{PUBLIC_BASE_URL}/callback/{CALLBACK_SECRET}
+```
+
+## Startup validation
+
+When `MOCK_MODE` is `false`, the app checks that four variables are non-empty before it starts:
+
+- `CONSUMER_KEY`
+- `CONSUMER_SECRET`
+- `PASSKEY`
+- `PUBLIC_BASE_URL`
+
+If any of them is missing or blank, a `RuntimeError` is raised and the process exits. This check does not run when `MOCK_MODE` is `true`.
+
+## Example `.env` file
+
+```bash
+MOCK_MODE=true
+
+# Required when MOCK_MODE=false (Daraja sandbox credentials)
+CONSUMER_KEY=
+CONSUMER_SECRET=
+PASSKEY=
+
+SHORTCODE=174379
+PUBLIC_BASE_URL=https://abc-123-456-789.ngrok-free.app
+CALLBACK_SECRET=replace-with-a-long-random-secret
+```

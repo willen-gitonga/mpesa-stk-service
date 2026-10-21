@@ -1,0 +1,98 @@
+---
+title: "POST /callback/{secret}"
+description: "Receive Safaricom STK Push result notifications and update payment records."
+---
+
+## Endpoint
+
+```
+POST /callback/{secret}
+```
+
+Safaricom sends a callback to this URL after the user completes or cancels an STK Push prompt. The full callback URL is built at startup from `PUBLIC_BASE_URL` and `CALLBACK_SECRET`:
+
+```
+{PUBLIC_BASE_URL}/callback/{CALLBACK_SECRET}
+```
+
+You do not call this endpoint yourself. It is registered with Safaricom automatically when you initiate an STK Push via [`POST /stk-push`](/api/stk-push).
+
+## Authentication
+
+The `secret` path segment is compared against the `CALLBACK_SECRET` environment variable using `hmac.compare_digest` (constant-time comparison). If the values do not match, the server returns HTTP 404 with no information about why the request was rejected.
+
+Because Safaricom does not sign callback payloads, this secret URL is the only authentication mechanism. Keep `CALLBACK_SECRET` long and unpredictable in any non-mock deployment.
+
+## Request body
+
+The endpoint expects the standard Safaricom `stkCallback` JSON structure under `Body.stkCallback`:
+
+```json
+{
+  "Body": {
+    "stkCallback": {
+      "MerchantRequestID": "29115-34620561-1",
+      "CheckoutRequestID": "ws_CO_MOCK_ABCDEF123456",
+      "ResultCode": 0,
+      "ResultDesc": "The service request is processed successfully.",
+      "CallbackMetadata": {
+        "Item": [
+          { "Name": "Amount", "Value": 1.0 },
+          { "Name": "MpesaReceiptNumber", "Value": "SAMPLE1234" },
+          { "Name": "TransactionDate", "Value": 20261021103000 },
+          { "Name": "PhoneNumber", "Value": 254708374149 }
+        ]
+      }
+    }
+  }
+}
+```
+
+Required fields inside `stkCallback`:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `CheckoutRequestID` | string | Matches the payment record created by `/stk-push`. |
+| `ResultCode` | integer | `0` means success, any other value means failure. |
+
+Optional fields inside `stkCallback`:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `ResultDesc` | string | Human-readable result description. Stored on the payment record if present. |
+| `CallbackMetadata.Item` | array | Present only on success. The server extracts the `MpesaReceiptNumber` entry if available. |
+
+If `Body`, `stkCallback`, `CheckoutRequestID`, or `ResultCode` is missing or malformed, the endpoint returns HTTP 400 with the detail `"Not an STK Push callback"`.
+
+## How the payment record is updated
+
+When the callback arrives with a valid secret and a well-formed payload, the server looks up the in-memory payment by `CheckoutRequestID`.
+
+- If no matching payment exists (unknown checkout ID), the callback is silently ignored.
+- If the matching payment has already moved past `"pending"` status, the callback is silently ignored (no double-processing).
+- If the payment is still `"pending"`:
+  - **`ResultCode` is 0**: `status` is set to `"completed"` and `receipt_number` is set to the `MpesaReceiptNumber` value from `CallbackMetadata.Item`.
+  - **`ResultCode` is non-zero**: `status` is set to `"failed"` and `receipt_number` remains null.
+  - `result_desc` is set to the `ResultDesc` value in both cases.
+
+After processing you can retrieve the updated record with [`GET /payments/{checkout_request_id}`](/api/payment-status).
+
+## Response
+
+The endpoint always returns HTTP 200 with the following JSON body, regardless of whether the payment was found or updated:
+
+```json
+{
+  "ResultCode": 0,
+  "ResultDesc": "Accepted"
+}
+```
+
+Safaricom expects this acknowledgement. Returning a different status code may cause Safaricom to retry the callback.
+
+## Error responses
+
+| Status | Condition |
+|---|---|
+| 404 | The `secret` path segment does not match `CALLBACK_SECRET`. |
+| 400 | The request body is not a valid STK Push callback (missing or malformed `Body.stkCallback`, `CheckoutRequestID`, or `ResultCode`). |
