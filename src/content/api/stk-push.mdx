@@ -1,0 +1,80 @@
+---
+title: POST /stk-push
+description: Send an M-Pesa STK push prompt to a phone number and receive a pending payment record.
+---
+
+Send a payment prompt to a Kenyan mobile number. The server forwards the request to the Safaricom Daraja sandbox (or returns a synthetic response in mock mode) and responds with a pending payment record you can poll via `GET /payments/{checkout_request_id}`.
+
+## Request
+
+```
+POST /stk-push
+Content-Type: application/json
+```
+
+### Body fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `phone_number` | string | Yes | Kenyan mobile number. Accepts `0712345678` or `+254712345678`. The server strips non-digit characters and converts a leading `0` to `254`. After normalization the number must match the pattern `254[71]XXXXXXXX` (prefixes `2547` and `2541` only). |
+| `amount` | integer | Yes | Amount in whole Kenyan shillings. Must be 1 or greater. |
+
+### Example request
+
+```bash
+curl -X POST http://localhost:8000/stk-push \
+  -H "Content-Type: application/json" \
+  -d '{"phone_number": "0712345678", "amount": 100}'
+```
+
+## Responses
+
+### 202 Accepted
+
+Returned when the STK push request is accepted for processing. The payment starts in `pending` status.
+
+```json
+{
+  "checkout_request_id": "ws_CO_MOCK_A1B2C3D4E5F6",
+  "phone_number": "254712345678",
+  "amount": 100,
+  "status": "pending",
+  "result_desc": null,
+  "receipt_number": null
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `checkout_request_id` | string | Identifier for this payment. Use it to poll status at [`GET /payments/{checkout_request_id}`](/api/payment-status). |
+| `phone_number` | string | The normalized 12-digit phone number. |
+| `amount` | integer | The requested amount. |
+| `status` | string | Always `"pending"` at this point. Updated to `"completed"` or `"failed"` when the callback arrives. |
+| `result_desc` | null | Populated after the callback is received. |
+| `receipt_number` | null | Populated with the M-Pesa receipt number on a successful payment. |
+
+### 422 Unprocessable Entity
+
+Returned when the request body fails validation, for example when `phone_number` does not resolve to a valid Kenyan mobile number or `amount` is less than 1.
+
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "phone_number"],
+      "msg": "Value error, Use a Kenyan mobile number such as 0712345678 or 254712345678"
+    }
+  ]
+}
+```
+
+### 502 Bad Gateway
+
+Returned when the Safaricom Daraja API returns an error or the HTTP request to it fails. The `detail` field contains diagnostic information.
+
+```json
+{
+  "detail": "Daraja error: Authentication failed (401). Check CONSUMER_KEY and CONSUMER_SECRET."
+}
+```

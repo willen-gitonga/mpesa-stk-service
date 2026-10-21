@@ -1,47 +1,143 @@
 ---
 title: Quickstart
-description: Guide a new reader through one useful workflow and show them how to verify it.
+description: Clone the service, send a test STK push in mock mode, simulate a callback, and optionally connect to the Daraja sandbox.
 ---
 
-A strong quickstart produces one meaningful result. Replace the placeholders
-below with the shortest supported path for your product.
+## Mock mode
 
-## Before you begin
+Mock mode returns synthetic responses without contacting Safaricom. No developer account is needed.
 
-List only the requirements needed for this workflow:
+### Before you begin
 
-- An account or credential, when required
-- A supported runtime, device, browser, or operating system
-- Permission to create or change the resource used in the example
+- Python 3.10 or later
 
 <Steps>
-  <Step title="Install the required tool">
-    Give readers one recommended installation command.
-
+  <Step title="Clone and install">
     ```bash
-    npm install your-package
+    git clone https://github.com/willen-gitonga/mpesa-stk-helper.git
+    cd mpesa-stk-helper
+    python3 -m venv virtual
+    source virtual/bin/activate
+    pip install -r requirements.txt
     ```
   </Step>
-  <Step title="Add the minimum configuration">
-    Include only the values needed for the first successful run.
+  <Step title="Create the env file">
+    ```bash
+    cp .env.example .env
+    ```
+
+    The defaults set `MOCK_MODE=true`, so no other changes are required.
+  </Step>
+  <Step title="Start the server">
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+
+    You should see output ending with `Uvicorn running on http://127.0.0.1:8000`.
+  </Step>
+  <Step title="Send a test STK push">
+    ```bash
+    curl -s -X POST http://127.0.0.1:8000/stk-push \
+      -H "Content-Type: application/json" \
+      -d '{"phone_number": "0712345678", "amount": 1}'
+    ```
+
+    The response contains a `checkout_request_id` and a status of `"pending"`:
+
+    ```json
+    {
+      "checkout_request_id": "ws_CO_MOCK_...",
+      "phone_number": "254712345678",
+      "amount": 1,
+      "status": "pending",
+      "result_desc": null,
+      "receipt_number": null
+    }
+    ```
+
+    Copy the `checkout_request_id` value for the next step.
+  </Step>
+  <Step title="Simulate a callback">
+    Open `samples/callback.json` and replace `REPLACE_ME` with the `checkout_request_id` you copied. Then send it to the callback endpoint:
 
     ```bash
-    your-cli init
+    curl -s -X POST http://127.0.0.1:8000/callback/change-me \
+      -H "Content-Type: application/json" \
+      -d @samples/callback.json
     ```
+
+    The path segment `change-me` is the default `CALLBACK_SECRET`.
   </Step>
-  <Step title="Complete the first task">
-    Use a realistic example that produces an observable result.
+  <Step title="Check the payment status">
+    Replace `CHECKOUT_REQUEST_ID` with your value:
 
     ```bash
-    your-cli start
+    curl -s http://127.0.0.1:8000/payments/CHECKOUT_REQUEST_ID
     ```
-  </Step>
-  <Step title="Verify the result">
-    State exactly what the reader should see and how to recover when it does not appear.
+
+    The status is now `"completed"` and the receipt number is `"SAMPLE1234"`:
+
+    ```json
+    {
+      "checkout_request_id": "ws_CO_MOCK_...",
+      "phone_number": "254712345678",
+      "amount": 1,
+      "status": "completed",
+      "result_desc": "The service request is processed successfully.",
+      "receipt_number": "SAMPLE1234"
+    }
+    ```
   </Step>
 </Steps>
 
-## Choose the next task
+You can also explore the API interactively at `http://127.0.0.1:8000/docs`, which opens the auto-generated Swagger UI.
 
-Link to the guide that naturally follows this result. Avoid ending the reader’s
-journey with a generic list of every feature.
+## Daraja sandbox
+
+To send real STK push prompts through the Safaricom sandbox, disable mock mode and supply your Daraja credentials.
+
+### Before you begin
+
+- A Safaricom Daraja developer account. Create one at [developer.safaricom.co.ke](https://developer.safaricom.co.ke) and register a sandbox app to obtain your consumer key, consumer secret, and the sandbox passkey.
+- A public HTTPS URL that forwards to your local server, for example via [ngrok](https://ngrok.com).
+
+<Steps>
+  <Step title="Expose your server">
+    In a separate terminal, start an ngrok tunnel:
+
+    ```bash
+    ngrok http 8000
+    ```
+
+    Copy the `https://...ngrok-free.app` URL from the output.
+  </Step>
+  <Step title="Update the env file">
+    Edit `.env` with your Daraja credentials and the ngrok URL:
+
+    ```bash
+    MOCK_MODE=false
+    CONSUMER_KEY=your-consumer-key
+    CONSUMER_SECRET=your-consumer-secret
+    PASSKEY=your-sandbox-passkey
+    SHORTCODE=174379
+    PUBLIC_BASE_URL=https://your-subdomain.ngrok-free.app
+    CALLBACK_SECRET=replace-with-a-long-random-secret
+    ```
+
+    `CONSUMER_KEY`, `CONSUMER_SECRET`, `PASSKEY`, and `PUBLIC_BASE_URL` must be non-empty when `MOCK_MODE` is `false`, or the server refuses to start.
+  </Step>
+  <Step title="Restart the server">
+    Stop the running uvicorn process and start it again:
+
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+  </Step>
+  <Step title="Send a live STK push">
+    Use the same curl command from mock mode. If your credentials are valid, Safaricom sends a push notification to the phone number. When the user completes or cancels the prompt, Safaricom posts a callback to your ngrok URL and the payment status updates automatically.
+  </Step>
+</Steps>
+
+## Next steps
+
+See the [API reference](/api/stk-push) for full request and response details, or the [Configuration](/configuration) page for all available environment variables.

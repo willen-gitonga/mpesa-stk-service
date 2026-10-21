@@ -1,0 +1,62 @@
+---
+title: "GET /payments/{checkout_request_id}"
+description: "Poll for the current status of an STK push payment."
+---
+
+## Request
+
+```
+GET /payments/{checkout_request_id}
+```
+
+`checkout_request_id` is the string returned in the `checkout_request_id` field of a successful [POST /stk-push](/api/stk-push) response.
+
+## Response
+
+A successful request returns HTTP 200 with the payment object:
+
+```json
+{
+  "checkout_request_id": "ws_CO_01012026120000123456",
+  "phone_number": "254712345678",
+  "amount": 100,
+  "status": "pending",
+  "result_desc": null,
+  "receipt_number": null
+}
+```
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `checkout_request_id` | string | Identifier returned by Safaricom (or a generated UUID in mock mode). |
+| `phone_number` | string | Normalized Kenyan mobile number in `254…` format. |
+| `amount` | integer | Amount in whole Kenyan shillings. |
+| `status` | string | One of `"pending"`, `"completed"`, or `"failed"`. |
+| `result_desc` | string or null | Description set by the callback. Null while the payment is pending. |
+| `receipt_number` | string or null | M-Pesa receipt number, present only when status is `"completed"`. |
+
+### Status transitions
+
+A payment starts as `"pending"` when the STK push is accepted. Once Safaricom delivers the callback result, the status changes to `"completed"` (ResultCode 0) or `"failed"` (any other ResultCode).
+
+## Errors
+
+### 404 Not found
+
+Returned when no payment matches the given `checkout_request_id`.
+
+```json
+{
+  "detail": "Payment not found"
+}
+```
+
+This can happen if the ID is incorrect or if the server restarted since the push was initiated. Payments are stored in memory and do not survive restarts.
+
+## Example
+
+```bash
+curl http://localhost:8000/payments/ws_CO_01012026120000123456
+```

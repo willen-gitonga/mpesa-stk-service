@@ -23,46 +23,31 @@
   },
   "tabs": [
     {
-      "tab": "Get started",
+      "tab": "Documentation",
       "groups": [
         {
-          "group": "Get started",
-          "pages": ["introduction", "quickstart"]
+          "group": "Getting Started",
+          "pages": [
+            "introduction",
+            "quickstart"
+          ]
         },
         {
-          "group": "Design your docs",
-          "pages": ["components", "customization"]
-        }
-      ]
-    },
-    {
-      "tab": "Guides",
-      "groups": [
-        {
-          "group": "Work with Thally",
+          "group": "Reference",
           "pages": [
-            "guides/create-a-site",
-            "guides/work-with-the-cli",
-            "guides/connect-ai-tools"
+            "configuration",
+            "changelog"
+          ]
+        },
+        {
+          "group": "API Reference",
+          "pages": [
+            "api/stk-push",
+            "api/payment-status",
+            "api/callbacks"
           ]
         }
       ]
-    },
-    {
-      "tab": "API Reference",
-      "groups": [
-        {
-          "group": "Overview",
-          "pages": ["api/introduction", "api/authentication"]
-        }
-      ],
-      "api": {
-        "source": "openapi.yaml"
-      }
-    },
-    {
-      "tab": "Changelog",
-      "href": "/changelog"
     }
   ]
 }

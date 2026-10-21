@@ -1,45 +1,42 @@
 ---
 title: Introduction
-description: Give readers a clear path from their first question to a result they can verify.
-mode: home
+description: A FastAPI service that wraps Safaricom's Daraja STK Push API, handling access tokens, password generation, phone normalization, and callback parsing.
 ---
 
-<Hero
-  title="Build documentation around the reader"
-  subtitle="Start with a useful first result, organize what follows, and publish every format from one reviewable source."
-  primaryLabel="Get started"
-  primaryHref="/quickstart"
-  secondaryLabel="Publish your docs"
-  secondaryHref="/guides/create-a-site"
-/>
+M-Pesa STK Push Helper is a FastAPI service (version 0.1.0) that sends M-Pesa STK Push payment prompts through Safaricom's Daraja sandbox API and records results when Safaricom calls back. It handles the repetitive parts of the Daraja integration so you can focus on your application logic.
 
-## Build the reader journey
+## What it does
 
-Begin with the task that brings most readers to your documentation, then make
-the next useful step obvious.
+- **Access-token management.** Fetches and caches Daraja OAuth tokens, refreshing them automatically before they expire.
+- **Password and timestamp generation.** Builds the base64-encoded password from your shortcode, passkey, and a timestamp in East Africa Time, as the Daraja API requires.
+- **Phone number normalization.** Accepts local (`0712345678`) or international (`+254712345678`) formats and converts them to the `254...` form that Daraja expects.
+- **Callback parsing.** Receives Safaricom's asynchronous result on a secret URL path, extracts the receipt number and result code, and updates the payment record.
+- **Mock mode.** Returns synthetic responses without contacting Safaricom, so you can develop and test without Daraja credentials.
 
-<CardGroup cols="2">
-  <Card title="Write your quickstart" icon="party-horn" href="/quickstart">
-    Turn prerequisites, setup, one realistic task, and verification into a short path.
-  </Card>
-  <Card title="Organize your navigation" icon="grid-round" href="/customization">
-    Group related tasks and references around how people use your product.
-  </Card>
-  <Card title="Document your API" icon="code-simple" href="/api">
-    Replace `openapi.yaml` to publish browsable endpoint docs with a live playground.
-  </Card>
-  <Card title="Learn the Thally workflow" icon="wrench" href="/guides/create-a-site">
-    Create, publish, and update sites from the Cloud dashboard, the CLI, or your AI tools.
-  </Card>
-</CardGroup>
+## Requirements
 
-## Publish from one source
+Python 3.10 or later is required. The project uses Python's `X | None` union-type syntax, which is not available in earlier versions.
 
-Thally turns the same reviewed content into HTML, search, agent discovery files,
-Markdown mirrors, and a read-only MCP surface — so people and AI tools read the
-same, current answer. Add only the locales your readers need.
+## Dependencies
 
-<Note type="info" title="Start with the product, not the template">
-  Replace this page with the questions, terminology, and workflows your readers
-  already use. Keep `docs.json` focused on the path between those tasks.
-</Note>
+| Package | Pinned version |
+|---|---|
+| fastapi | 0.145.0 |
+| `uvicorn[standard]` | 0.54.0 |
+| httpx | 0.28.1 |
+| pydantic-settings | 2.16.1 |
+| pytest | 9.1.1 |
+
+## Limitations
+
+Keep these constraints in mind before you start:
+
+- **Sandbox only.** The Daraja base URL (`https://sandbox.safaricom.co.ke`) is hardcoded. There is no production URL option.
+- **In-memory storage.** Payment records are held in a Python `dict` inside the application process. All data is lost when the server restarts.
+- **No endpoint authentication.** The `/stk-push` and `/payments` routes have no auth layer. Add your own middleware or gateway before exposing the service publicly.
+- **Limited phone prefixes.** The phone validation regex accepts numbers starting with `2547` or `2541` only. Other valid Kenyan prefixes (for example `2546`) are rejected.
+- **Hardcoded request fields.** `AccountReference` is set to `"DocsDemo"` and `TransactionDesc` to `"Payment"` in every STK push request. These values are not configurable.
+
+## Next steps
+
+See the [Quickstart](/quickstart) to run the service locally in mock mode.
